@@ -72,23 +72,22 @@
 
 <script type="module">
 import { normalizeCountryCodes, countryRecord, countryFlagUrl, KNOWN_TRIP_COUNTRIES } from "./country-utils.js";
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-import { getAuth,onAuthStateChanged,signInWithEmailAndPassword,signOut } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
-import { getDatabase,ref,get,set,update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
+import { app, auth, db } from "./firebase.js";
+import { onAuthStateChanged,signInWithEmailAndPassword,signOut } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+import { ref,get,set,update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
 import { getStorage,ref as storageRef,uploadBytes,getDownloadURL } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-storage.js";
-const firebaseConfig={apiKey:"AIzaSyBcRB_dec2OunBPevgemcWouCfDP6dNZV4",authDomain:"moj-dziennik-podrozy.firebaseapp.com",databaseURL:"https://moj-dziennik-podrozy-default-rtdb.europe-west1.firebasedatabase.app",projectId:"moj-dziennik-podrozy",storageBucket:"moj-dziennik-podrozy.firebasestorage.app",messagingSenderId:"997572019753",appId:"1:997572019753:web:0f5aa78a1c24072de3be38"};
-const app=initializeApp(firebaseConfig),auth=getAuth(app),db=getDatabase(app),storage=getStorage(app);
+import { escapeHtml, getFriendlyErrorMessage } from "./utils.js";
+import { getTrips } from "./trips.js";
 const $=id=>document.getElementById(id);
+const storage=getStorage(app);
 const defaults={heroImage:"https://images.unsplash.com/photo-1533105079780-92b9be482077?auto=format&fit=crop&w=2000&q=85",aboutImage:"https://images.unsplash.com/photo-1500530855697-b586d89ba3ee?auto=format&fit=crop&w=1200&q=85",aboutText:"Jesteśmy Gabi i Paweł – razem odkrywamy świat, zbieramy wspomnienia i dzielimy się nimi tutaj z Wami. Podróże to nasza pasja, sposób na życie i najlepsza inwestycja w piękne chwile."};
 let tripsCache=[];
-function escapeHtml(v){return String(v??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#039;')}
 function dateValue(v){const d=new Date(v||'');return Number.isNaN(d.getTime())?0:d.getTime()}
 function formatDate(from,to){const f=from?new Date(from).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'}):'';const t=to?new Date(to).toLocaleDateString('pl-PL',{day:'numeric',month:'long',year:'numeric'}):'';return t?`${f} – ${t}`:f}
 async function isAdmin(uid){const s=await get(ref(db,`admins/${uid}`));return s.val()===true}
 async function loadSite(){const s=await get(ref(db,'siteContent/home'));const c={...defaults,...(s.val()||{})};let aboutText=c.aboutText||defaults.aboutText;aboutText=aboutText.replace(/^Jesteśmy\s+Gabi\s+i\s+Paweł\s*[–-]?\s*/i,'');$('hero').style.setProperty('--hero-image',`url("${c.heroImage}")`);$('aboutImage').src=c.aboutImage;$('aboutText').textContent=aboutText;$('heroPreview').src=c.heroImage;$('aboutPreview').src=c.aboutImage;$('heroUrl').value=c.heroImage;$('aboutUrl').value=c.aboutImage;$('aboutTextEdit').value=aboutText}
 async function loadTrips(){
-  const s=await get(ref(db,'trips'));
-  const data=s.val()||{};
+  const data=await getTrips(db);
   tripsCache=Object.entries(data).map(([id,t])=>({id,...t})).filter(t=>t.name).sort((a,b)=>dateValue(b.dateFrom)-dateValue(a.dateFrom));
 
   $('statTrips').textContent=tripsCache.length;
@@ -165,7 +164,7 @@ function bindSearch(){
   $("statCountriesBtn").onclick=renderCountryChooser;
 }
 function showAdmin(v){$('adminPanel').classList.toggle('is-visible',v);$('adminLoginBtn').textContent=v?'↪':'♙';$('adminLoginBtn').title=v?'Wyloguj administratora':'Logowanie administratora'}
-$('adminLoginBtn').onclick=async()=>{if($('adminPanel').classList.contains('is-visible')){await signOut(auth);return}$('loginModal').style.display='flex'};$('loginCancel').onclick=()=>{$('loginModal').style.display='none'};$('loginSubmit').onclick=async()=>{const email=$('loginEmail').value.trim(),pass=$('loginPassword').value;try{await signInWithEmailAndPassword(auth,email,pass);$('loginModal').style.display='none';$('loginStatus').textContent=''}catch(e){$('loginStatus').textContent='Nieprawidłowy login lub hasło.'}};
+$('adminLoginBtn').onclick=async()=>{if($('adminPanel').classList.contains('is-visible')){await signOut(auth);return}$('loginModal').style.display='flex'};$('loginCancel').onclick=()=>{$('loginModal').style.display='none'};$('loginSubmit').onclick=async()=>{const email=$('loginEmail').value.trim(),pass=$('loginPassword').value;try{await signInWithEmailAndPassword(auth,email,pass);$('loginModal').style.display='none';$('loginStatus').textContent=''}catch(e){$('loginStatus').textContent=getFriendlyErrorMessage(e,'Nieprawidłowy login lub hasło.')}};
 async function saveSetting(key,value){await update(ref(db,'siteContent/home'),{[key]:value});await loadSite();$('adminStatus').textContent='✅ Zapisano.';setTimeout(()=>$('adminStatus').textContent='',2500)}
 async function uploadImage(file,path){if(!file)return null;const r=storageRef(storage,`${path}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`);const snap=await uploadBytes(r,file);return await getDownloadURL(snap.ref)}
 $('saveHero').onclick=async()=>{try{const file=$('heroFile').files[0];const url=file?await uploadImage(file,'site/home'):($('heroUrl').value.trim()||null);if(!url)throw new Error('Podaj URL lub wybierz plik.');await saveSetting('heroImage',url)}catch(e){$('adminStatus').textContent=`❌ ${e.message.includes('storage')||e.code?.startsWith('storage/')?'Nie udało się wgrać pliku. Sprawdź Firebase Storage Rules.':e.message}`}};

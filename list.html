@@ -58,6 +58,7 @@
     };
 
     const database = getDatabase(initializeApp(firebaseConfig));
+    import { getFriendlyErrorMessage } from "./utils.js";
     const gallery = document.getElementById("galleryContent");
     const status = document.getElementById("galleryStatus");
     const backToTrips = document.getElementById("backToTrips");
@@ -427,7 +428,7 @@
         renderPlacePhotos(trip, place);
       } catch (error) {
         console.error("Błąd ładowania galerii:", error);
-        createEmptyState("Nie udało się załadować galerii. Spróbuj odświeżyć stronę.");
+        createEmptyState(getFriendlyErrorMessage(error, "Nie udało się załadować galerii. Spróbuj odświeżyć stronę."));
       }
     }
 
