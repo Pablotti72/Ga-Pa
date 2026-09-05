@@ -44,20 +44,9 @@
   </dialog>
 
   <script type="module">
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-    import { getDatabase, ref, get } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
-
-    const firebaseConfig = {
-      apiKey: "AIzaSyBcRB_dec2O2unBPevgemcWouCfDP6dNZV4",
-      authDomain: "moj-dziennik-podrozy.firebaseapp.com",
-      databaseURL: "https://moj-dziennik-podrozy-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "moj-dziennik-podrozy",
-      storageBucket: "moj-dziennik-podrozy.firebasestorage.app",
-      messagingSenderId: "997572019753",
-      appId: "1:997572019753:web:0f5aa78a1c24072de3be38"
-    };
-
-    const database = getDatabase(initializeApp(firebaseConfig));
+    import { db as database } from "./firebase.js";
+    import { getTrips, getTrip } from "./trips.js";
+    import { getFriendlyErrorMessage } from "./utils.js";
     const gallery = document.getElementById("galleryContent");
     const status = document.getElementById("galleryStatus");
     const backToTrips = document.getElementById("backToTrips");
@@ -398,13 +387,12 @@
     async function loadGallery() {
       try {
         if (!tripId) {
-          const snapshot = await get(ref(database, "trips"));
-          renderTripCovers(snapshot.val());
+          const trips = await getTrips(database);
+          renderTripCovers(trips);
           return;
         }
 
-        const tripSnapshot = await get(ref(database, `trips/${tripId}`));
-        const trip = tripSnapshot.val();
+        const trip = await getTrip(database, tripId);
 
         if (!trip) {
           createEmptyState("Nie znaleziono tej wyprawy.");
@@ -427,7 +415,7 @@
         renderPlacePhotos(trip, place);
       } catch (error) {
         console.error("Błąd ładowania galerii:", error);
-        createEmptyState("Nie udało się załadować galerii. Spróbuj odświeżyć stronę.");
+        createEmptyState(getFriendlyErrorMessage(error, "Nie udało się załadować galerii. Spróbuj odświeżyć stronę."));
       }
     }
 

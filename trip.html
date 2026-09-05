@@ -114,24 +114,11 @@
   <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
   <script type="module">
     import { detectCountryCode, normalizeCountryCodes, KNOWN_TRIP_COUNTRIES } from "./country-utils.js";
-    import { initializeApp } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-app.js";
-    import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
-    import { getDatabase, ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
-
-    // Konfiguracja Firebase
-    const firebaseConfig = {
-      apiKey: "AIzaSyBcRB_dec2OunBPevgemcWouCfDP6dNZV4",
-      authDomain: "moj-dziennik-podrozy.firebaseapp.com",
-      databaseURL: "https://moj-dziennik-podrozy-default-rtdb.europe-west1.firebasedatabase.app",
-      projectId: "moj-dziennik-podrozy",
-      storageBucket: "moj-dziennik-podrozy.firebasestorage.app",
-      messagingSenderId: "997572019753",
-      appId: "1:997572019753:web:0f5aa78a1c24072de3be38"
-    };
-
-    const app = initializeApp(firebaseConfig);
-    const auth = getAuth(app);
-    const database = getDatabase(app);
+    import { auth, db as database } from "./firebase.js";
+    import { onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-auth.js";
+    import { ref, get, set, remove, update } from "https://www.gstatic.com/firebasejs/9.6.10/firebase-database.js";
+    import { escapeHtml, getFriendlyErrorMessage } from "./utils.js";
+    import { getTrip } from "./trips.js";
 
     const urlParams = new URLSearchParams(window.location.search);
     const tripId = urlParams.get("id");
@@ -180,8 +167,7 @@
     function loadTripAndPlaces() {
       document.getElementById("tripDescription").textContent = "Ładowanie wyprawy...";
 
-      get(ref(database, `trips/${tripId}`)).then((snapshot) => {
-          const trip = snapshot.val();
+      getTrip(database, tripId).then((trip) => {
           if (!trip) {
             document.getElementById("tripDescription").textContent = "❌ Wyprawa nie istnieje.";
             return;
@@ -256,7 +242,7 @@
         })
         .catch(err => {
           console.error("Błąd ładowania wyprawy:", err);
-          document.getElementById("tripDescription").textContent = "❌ Nie udało się załadować wyprawy.";
+          document.getElementById("tripDescription").textContent = `❌ ${getFriendlyErrorMessage(err, "Nie udało się załadować wyprawy.")}`;
         });
     }
 
@@ -386,7 +372,7 @@
         loadTripAndPlaces();
       } catch (err) {
         console.error("Błąd zapisu:", err);
-        showMessage("❌ Nie udało się zapisać.");
+        showMessage(`❌ ${getFriendlyErrorMessage(err, "Nie udało się zapisać.")}`);
       }
     });
 
@@ -423,8 +409,6 @@
         .replace(/[^a-z0-9]/g, "_")
         .replace(/_+/g, "_")
         .replace(/^_+|_+$/g, "");
-    }
-    function escapeHtml(value) {      return String(value ?? "").replace(/[&<>"']/g, ch => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","\'":"&#39;"}[ch]));
     }
 
     function shortDescription(text) {
